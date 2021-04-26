@@ -1,0 +1,42 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation projet 10
+Resources:
+  ONEVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC'
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2a
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-a'
+      VpcId: !Ref ONEVPC
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2b
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-b'
+      VpcId: !Ref ONEVPC
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2c
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-c'
+      VpcId: !Ref ONEVPC
