@@ -70,8 +70,11 @@ Resources:
       Engine: mariadb
       MasterUserPassword: Marinash-66
       MasterUsername: administrateur
-      AvailabilityZone: eu-west-2a
+      MultiAZ: True
       DBSubnetGroupName: !Ref DBSousreseauGroup
       VPCSecurityGroups:
       - !GetAtt DBEC2SecurityGroup.GroupId
     DeletionPolicy: Snapshot
+    
+  LeBucket:
+    Type: AWS::S3::Bucket
