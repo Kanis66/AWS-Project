@@ -11,7 +11,7 @@ Resources:
         - Key: Name
           Value: 'ONEVPC'
 
-  PrivateSubnetA:
+  SousReseauA:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-2a
@@ -21,7 +21,7 @@ Resources:
           Value: 'ONEVPC-AZ-a'
       VpcId: !Ref ONEVPC
 
-  PrivateSubnetB:
+  SousReseauB:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-2b
@@ -31,7 +31,7 @@ Resources:
           Value: 'ONEVPC-AZ-b'
       VpcId: !Ref ONEVPC
 
-  PrivateSubnetC:
+  SousReseauC:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-2c
@@ -40,3 +40,38 @@ Resources:
         - Key: Name
           Value: 'ONEVPC-AZ-c'
       VpcId: !Ref ONEVPC
+      
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+      VpcId: !Ref ONEVPC
+      
+  DBSousreseauGroup: 
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Groupe data sous reseau 
+      DBSubnetGroupName: DataGroup
+      SubnetIds: 
+        - !Ref SousReseauA
+        - !Ref SousReseauB
+    
+      
+  DatabaseWP:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t2.micro
+      DBName: datawp
+      Engine: mariadb
+      MasterUserPassword: Marinash-66
+      MasterUsername: administrateur
+      AvailabilityZone: eu-west-2a
+      DBSubnetGroupName: !Ref DBSousreseauGroup
+      VPCSecurityGroups:
+      - !GetAtt DBEC2SecurityGroup.GroupId
+    DeletionPolicy: Snapshot
