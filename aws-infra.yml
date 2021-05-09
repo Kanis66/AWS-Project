@@ -41,6 +41,116 @@ Resources:
           Value: 'ONEVPC-AZ-c'
       VpcId: !Ref ONEVPC
       
+  IPpublic:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  
+  AssocieIPpublic:
+    DependsOn: LoadBalancer
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt IPpublic.AllocationId
+      InstanceId: !Ref LoadBalancer
+      
+  EC2SecurityGroup: 
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:  EC2 security group 
+      SecurityGroupEgress: 
+        - IpProtocol:  -1
+          CidrIp:  0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref ONEVPC
+      
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: !Ref AmiIdentifier
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref EC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo systemctl start httpd
+          
+  SRAScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfig
+      AvailabilityZones: !Ref SousReseauA
+      VPCZoneIdentifier: !Ref SousReseauA
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref SRATargetGroup
+
+  SRATargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ONEVPC
+  
+  SRBScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfig
+      AvailabilityZones: !Ref SousReseauB
+      VPCZoneIdentifier: !Ref SousReseauB
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref SRBTargetGroup
+
+  SRBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ONEVPC
+      
+  LoadBalancer: 
+    Type:AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme:internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:  
+        - !Ref SousReseauA
+        - !Ref SousReseauB
+      
+  LoadBalancerSecurityGroup:
+    Type:AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 security group 
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref ONEVPC
+      
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: 
+            - !Ref SRATargetGroup
+            - !Ref SRBTargetGroup
+
   DBEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -74,7 +184,6 @@ Resources:
       DBSubnetGroupName: !Ref DBSousreseauGroup
       VPCSecurityGroups:
       - !GetAtt DBEC2SecurityGroup.GroupId
-    DeletionPolicy: Snapshot
     
   LeBucket:
     Type: AWS::S3::Bucket
