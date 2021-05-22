@@ -251,36 +251,14 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       'AWS::CloudFormation::Init':
-        docker-install:
-          commands:
-            update:
-               command: "sudo apt update"
-               ignoreErrors: "true"
-            install:
-               command: "sudo apt install -y docker docker-compose"
-               ignoreErrors: "true"
           files:
             /home/admin/docker-compose.yml:
-              content: !Sub |
-                version: '3'
-                services: 
-                  wordpress:
-                    image: wordpress:latest
-                    volumes:
-                      - !Ref LeBucket:/var/www/html/wp-content
-                    ports:
-                      - "80:80"
-                    restart: always
-                    environment:
-                      WORDPRESS_DB_HOST: !Ref DatabaseWP.ENDPOINT:3306
-                      WORDPRESS_DB_USER: !Ref DBUser
-                      WORDPRESS_DB_PASSWORD: !Ref DBPassword
-                      WORDPRESS_DB_NAME: !Ref DBNom
+              source: https://cf-templates-1qd5t744zqdqx-eu-west-2.s3.eu-west-2.amazonaws.com/docker-compose.yml
               mode: "000644"
               owner: "admin"
               group: "admin"
     Properties:
-      ImageId: ami-050949f5d3aede071
+      ImageId: ami-0c4d81e9bfdbb4f6e
       InstanceType: t2.micro 
       AssociatePublicIpAddress: true
       KeyName: 
