@@ -67,7 +67,6 @@ Resources:
         - Key: Name
           Value: 'ONEVPC-AZ-c'
       VpcId: !Ref ONEVPC
-
       
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -86,6 +85,7 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+
   NatEipB:
     Type: AWS::EC2::EIP
     Properties:
@@ -118,6 +118,7 @@ Resources:
       Tags:
         - Key: Name
           Value: ONEVPC-route-public-a
+
   AttachPublicRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -131,6 +132,7 @@ Resources:
       Tags:
         - Key: Name
           Value: ONEVPC-route-public-b
+
   AttachPublicRouteTableB:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -143,6 +145,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableA
+
   PublicRouteB:
     Type: AWS::EC2::Route
     Properties:
@@ -150,23 +153,11 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableB
       
- # EC2SecurityGroup: 
- #   Type:  AWS::EC2::SecurityGroup
- #   Properties:
- #     GroupDescription:  EC2 security group 
- #     SecurityGroupEgress: 
- #       - IpProtocol:  -1
- #         CidrIp:  0.0.0.0/0
- #     SecurityGroupIngress:
- #       - IpProtocol: tcp
- #         FromPort: 80
- #         ToPort: 80
- #         CidrIp: 0.0.0.0/0
- #     VpcId: !Ref ONEVPC
-      
   LoadBalancer: 
     Type:  AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
+      SecurityGroups:
+        - !Ref SRSecurityGroup
       Subnets:  
         - !Ref SousReseauA
         - !Ref SousReseauB
@@ -222,71 +213,111 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !Ref LaunchConfig
-#      MinSize: '2'
-#      AvailabilityZones: 
-#        - eu-west-2a
       VPCZoneIdentifier: 
         - !Ref SousReseauA
         - !Ref SousReseauB
       MinSize: 2
-      MaxSize: 5
+      MaxSize: 6
       TargetGroupARNs: 
         - !Ref SRATargetGroup
         - !Ref SRBTargetGroup
     DependsOn: AttachInternetGateway
-  
-#  SRBScalingGroup:
-#    Type: AWS::AutoScaling::AutoScalingGroup
-#    Properties:
-#      LaunchConfigurationName: !Ref LaunchConfig
-#      MinSize: '1'
-#      MaxSize: '5'
-#      AvailabilityZones: 
-#        - eu-west-2b
-#      VPCZoneIdentifier: !Ref SousReseauB
-#      MinSize: 1
-#      TargetGroupARNs: !Ref SRBTargetGroup
       
   LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       'AWS::CloudFormation::Init':
-        docker-install:
-          commands:
-            update:
-               command: "sudo apt update"
-               ignoreErrors: "true"
-            install:
-               command: "sudo apt install -y docker docker-compose"
-               ignoreErrors: "true"
+        configSets:
+          wordpress_install:
+            - install_cfn
+            - install_wordpress
+        install_cfn:
           files:
-            /home/admin/docker-compose.yml:
-              content: !Sub |
-                version: '3'
-                services: 
-                  wordpress:
-                    image: wordpress:latest
-                    volumes:
-                      - !Ref LeBucket:/var/www/html/wp-content
-                    ports:
-                      - "80:80"
-                    restart: always
-                    environment:
-                      WORDPRESS_DB_HOST: !Ref DatabaseWP.ENDPOINT:3306
-                      WORDPRESS_DB_USER: !Ref DBUser
-                      WORDPRESS_DB_PASSWORD: !Ref DBPassword
-                      WORDPRESS_DB_NAME: !Ref DBNom
+            /etc/cfn/cfn-hup.conf:
+              content: !Join 
+                - ''
+                - - |
+                    [main]
+                  - stack=
+                  - !Ref 'AWS::StackId'
+                  - |+
+
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - |+
+
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Join 
+                - ''
+                - - |
+                    [cfn-auto-reloader-hook]
+                  - |
+                    triggers=post.update
+                  - >
+                    path=Resources.LaunchConfig.Metadata.AWS::CloudFormation::Init
+                  - 'action=/opt/aws/bin/cfn-init -v '
+                  - '         --stack '
+                  - !Ref 'AWS::StackName'
+                  - '         --resource LaunchConfig '
+                  - '         --configsets wordpress_install '
+                  - '         --region '
+                  - !Ref 'AWS::Region'
+                  - |+
+
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        install_wordpress:
+          files:
+            /home/ec2-user/.env:
+              content: 
+                !Sub |
+                   AWS_S3_BUCKET=${LeBucket}
+                   AWS_ACCESS_KEY_ID=AKIAYMXOCIZQA43WMZNW
+                   AWS_SECRET_ACCESS_KEY=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
+
+                   WORDPRESS_DB_HOST=${DatabaseWP.Endpoint.Address}:3306
+                   WORDPRESS_DB_USER=${DBUser}
+                   WORDPRESS_DB_PASSWORD=${DBPassword}
+                   WORDPRESS_DB_NAME=${DBNom}
+                   
               mode: "000644"
-              owner: "admin"
-              group: "admin"
+              owner: "root"
+              group: "root"
     Properties:
-      ImageId: ami-050949f5d3aede071
+      ImageId: ami-0941da882bf4738dd
       InstanceType: t2.micro 
       AssociatePublicIpAddress: true
       KeyName: 
         Ref: "KeyName"
       SecurityGroups:
           - !Ref SRSecurityGroup
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              # Install the files and packages from the metadata
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource LaunchConfig '
+            - '         --configsets wordpress_install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+              
     DependsOn: DatabaseWP
 
   
@@ -327,6 +358,13 @@ Resources:
     
   LeBucket:
     Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+         BlockPublicAcls: true
+         BlockPublicPolicy: true
+         IgnorePublicAcls: true
+         RestrictPublicBuckets: true
     
 Outputs:
   WebsiteURL:

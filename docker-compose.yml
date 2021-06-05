@@ -1,14 +1,35 @@
 version: '3'
-services: 
-  wordpress:
-    image: wordpress:latest
+
+services:
+  s3fs:
+    image: xueshanf/s3fs:latest
+    restart: always
+    environment:
+      AWSACCESSKEYID: ${AWS_ACCESS_KEY_ID}
+      AWSSECRETACCESSKEY: ${AWS_SECRET_ACCESS_KEY}
+    cap_add:
+      - MKNOD
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse
     volumes:
-      - !Ref LeBucket:/var/www/html/wp-content
+      - /mnt/lebucket:/home/test:shared
+    command: /usr/bin/s3fs -f -o allow_other -o use_cache=/tmp ${AWS_S3_BUCKET} /home/te                                                 st
+
+  wordpress:
+    privileged: true
+    image: wordpress
+    depends_on:
+      - s3fs
     ports:
       - "80:80"
     restart: always
     environment:
-      WORDPRESS_DB_HOST: !Ref DatabaseWP.ENDPOINT:3306
-      WORDPRESS_DB_USER: !Ref DBUser
-      WORDPRESS_DB_PASSWORD: !Ref DBPassword
-      WORDPRESS_DB_NAME: !Ref DBNom
+      WORDPRESS_DB_HOST: ${WORDPRESS_DB_HOST}
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${WORDPRESS_DB_NAME}
+    volumes:
+      - /mnt/lebucket:/var/www/html/wp-content:shared
