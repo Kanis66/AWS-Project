@@ -222,6 +222,17 @@ Resources:
         - !Ref SRATargetGroup
         - !Ref SRBTargetGroup
     DependsOn: AttachInternetGateway
+
+  utilec2:
+    Type: AWS::IAM::User
+    Properties: 
+      Groups: 
+        - Administrator
+  
+  utilec2secur:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref utilec2
       
   LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -229,74 +240,25 @@ Resources:
       'AWS::CloudFormation::Init':
         configSets:
           wordpress_install:
-            - install_cfn
-            - install_wordpress
-        install_cfn:
-          files:
-            /etc/cfn/cfn-hup.conf:
-              content: !Join 
-                - ''
-                - - |
-                    [main]
-                  - stack=
-                  - !Ref 'AWS::StackId'
-                  - |+
-
-                  - region=
-                  - !Ref 'AWS::Region'
-                  - |+
-
-              mode: '000400'
-              owner: root
-              group: root
-            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-              content: !Join 
-                - ''
-                - - |
-                    [cfn-auto-reloader-hook]
-                  - |
-                    triggers=post.update
-                  - >
-                    path=Resources.LaunchConfig.Metadata.AWS::CloudFormation::Init
-                  - 'action=/opt/aws/bin/cfn-init -v '
-                  - '         --stack '
-                  - !Ref 'AWS::StackName'
-                  - '         --resource LaunchConfig '
-                  - '         --configsets wordpress_install '
-                  - '         --region '
-                  - !Ref 'AWS::Region'
-                  - |+
-
-              mode: '000400'
-              owner: root
-              group: root
-          services:
-            sysvinit:
-              cfn-hup:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files:
-                  - /etc/cfn/cfn-hup.conf
-                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+            - install_wordpress      
         install_wordpress:
           files:
             /home/ec2-user/.env:
               content: 
                 !Sub |
                    AWS_S3_BUCKET=${LeBucket}
-                   AWS_ACCESS_KEY_ID=AKIAYMXOCIZQA43WMZNW
-                   AWS_SECRET_ACCESS_KEY=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
+                   AWS_ACCESS_KEY_ID=${utilec2secur}
+                   AWS_SECRET_ACCESS_KEY=${utilec2secur.SecretAccessKey}
 
                    WORDPRESS_DB_HOST=${DatabaseWP.Endpoint.Address}:3306
                    WORDPRESS_DB_USER=${DBUser}
                    WORDPRESS_DB_PASSWORD=${DBPassword}
                    WORDPRESS_DB_NAME=${DBNom}
-                   
               mode: "000644"
               owner: "root"
-              group: "root"
+              group: "root"     
     Properties:
-      ImageId: ami-0941da882bf4738dd
+      ImageId: ami-097418bc7ceebf918
       InstanceType: t2.micro 
       AssociatePublicIpAddress: true
       KeyName: 

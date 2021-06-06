@@ -1,0 +1,4 @@
+crontab -e
+
+
+@reboot sleep 60 && /usr/bin/docker-compose -f /home/ec2-user/docker-compose.yml up -d
