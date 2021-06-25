@@ -1,0 +1,268 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation projet 10
+Parameters:  
+  KeyName:
+    Default: projet10
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  VPNlocalIP:
+    Default: 88.127.164.97
+    Description: Adresse IP public du reseau local
+    Type: String
+  
+  PreShareKey:
+    Default: zGDWSf7_YVB2UACpO5pAvUZ2jfl2a94J
+    Description: Cle partagee par defaut pour le VPN
+    Type: String
+  
+  LocalIPRange:
+    Default: 172.10.100.0/24
+    Description: Reseau local distant a joindre par vpn
+    Type: String
+ 
+Resources:
+  ONEVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC'
+
+  SousReseauA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2a
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-a'
+      VpcId: !Ref ONEVPC
+
+  SousReseauB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2b
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-b'
+      VpcId: !Ref ONEVPC
+
+  SousReseauC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2c
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-c'
+      VpcId: !Ref ONEVPC
+      
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-InternetGateway'
+          
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ONEVPC
+      InternetGatewayId: !Ref InternetGateway   
+      
+#  NatEipA:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      Domain: vpc
+
+#  NatEipB:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      Domain: vpc
+  
+#  NatEipC:
+#    Type: AWS::EC2::EIP
+#    Properties:
+#      Domain: vpc
+      
+#  NatGatewayA:
+#    DependsOn: AttachInternetGateway
+#    Type: AWS::EC2::NatGateway
+#    Properties:
+#      AllocationId: !GetAtt NatEipA.AllocationId
+#      SubnetId: !Ref SousReseauA
+#      Tags:
+#        - Key: Name
+#          Value: ONEVPC-nat-a
+          
+#  NatGatewayB:
+#    DependsOn: AttachInternetGateway
+#    Type: AWS::EC2::NatGateway
+#    Properties:
+#      AllocationId: !GetAtt NatEipB.AllocationId
+#      SubnetId: !Ref SousReseauB
+#      Tags:
+#        - Key: Name
+#          Value: ONEVPC-nat-b
+  
+#  NatGatewayC:
+#    DependsOn: AttachInternetGateway
+#    Type: AWS::EC2::NatGateway
+#    Properties:
+#      AllocationId: !GetAtt NatEipC.AllocationId
+#      SubnetId: !Ref SousReseauC
+#      Tags:
+#        - Key: Name
+#          Value: ONEVPC-nat-c
+          
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-a
+
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref SousReseauA
+  
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA  
+      
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-b
+
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref SousReseauB
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+      
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-private-c
+
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref SousReseauC
+
+#  PrivateRouteC:
+#    Type: AWS::EC2::Route
+#    Properties:
+#      DestinationCidrBlock: 0.0.0.0/0
+#      NatGatewayId: !Ref NatGatewayC
+#      RouteTableId: !Ref PrivateRouteTableC
+ 
+  VPNRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref LocalIPRange
+      GatewayId: !Ref VPNGateway
+      RouteTableId: !Ref PrivateRouteTableC 
+    DependsOn: 
+        - VPNGateway
+        - VPNCustomer
+        - VPNConnect
+      
+  SRSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 security group 
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref ONEVPC         
+  
+  VPNCustomer:
+    Type: AWS::EC2::CustomerGateway
+    Properties: 
+      BgpAsn: 65000
+      IpAddress: !Ref VPNlocalIP
+      Type: ipsec.1
+      
+  VPNGateway: 
+    Type: AWS::EC2::VPNGateway
+    Properties: 
+      Type: ipsec.1
+   
+  VPNgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      VpcId: !Ref ONEVPC
+      VpnGatewayId: !Ref VPNGateway
+  
+  VPNConnect:
+    Type: AWS::EC2::VPNConnection
+    Properties: 
+      Type: ipsec.1
+      StaticRoutesOnly: true
+      CustomerGatewayId: 
+        !Ref VPNCustomer
+      VpnGatewayId: 
+        !Ref VPNGateway
+      VpnTunnelOptionsSpecifications:
+        - PreSharedKey: !Ref PreShareKey
+   
+  VPNStaticRoute:
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties: 
+      DestinationCidrBlock: !Ref LocalIPRange
+      VpnConnectionId: !Ref VPNConnect
+        
+  Ec2Instance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-08a5663ea072b9305
+      InstanceType: t2.micro
+      KeyName: 
+        Ref: "KeyName"
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: SRSecurityGroup
+          SubnetId: !Ref SousReseauC

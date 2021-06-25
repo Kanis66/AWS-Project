@@ -1,0 +1,271 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation projet 10
+Parameters:  
+  KeyName:
+    Default: projet10
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  VPNlocalIP:
+    Default: 88.127.164.97
+    Description: Adresse IP publique du reseau local
+    Type: String
+  
+  VPNlocalIPRange:
+    Default: 88.127.164.97/32
+    Description: Adresse IP publique du reseau local Range
+    Type: String
+  
+  LocalIPRange:
+    Default: 172.10.100.0/24
+    Description: Reseau local distant a joindre par vpn
+    Type: String
+    
+  AWSIPRange:
+    Default: 10.0.2.0/24
+    Description: Reseau aws a joindre par vpn
+    Type: String
+    
+  PreShareKey:
+    Default: zGDWSf7_YVB2UACpO5pAvUZ2jfl2a94J
+    Description: Cle partagee par defaut pour le VPN
+    Type: String
+  
+Resources:
+  ONEVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC'
+
+  SousReseauA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2a
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-a'
+      VpcId: !Ref ONEVPC
+
+  SousReseauB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2b
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-b'
+      VpcId: !Ref ONEVPC
+
+  SousReseauC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2c
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-c'
+      VpcId: !Ref ONEVPC
+      
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-InternetGateway'
+          
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ONEVPC
+      InternetGatewayId: !Ref InternetGateway   
+          
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-a
+
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref SousReseauA
+  
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA  
+      
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-b
+
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref SousReseauB
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+      
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-private-c
+
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref SousReseauC
+
+#  PrivateRouteC:
+#    Type: AWS::EC2::Route
+#    Properties:
+#      DestinationCidrBlock: 0.0.0.0/0
+#      NatGatewayId: !Ref NatGatewayC
+#      RouteTableId: !Ref PrivateRouteTableC
+ 
+#  VPNRouteC:
+#    Type: AWS::EC2::Route
+#    Properties:
+#      DestinationCidrBlock: !Ref LocalIPRange
+#      LocalGatewayId: !Ref VPNGateway
+#      RouteTableId: !Ref PrivateRouteTableC 
+#    DependsOn: 
+#        - VPNGateway
+      
+  SRSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 security group 
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '500'
+          ToPort: '500'
+          CidrIp: !Ref VPNlocalIPRange
+        - IpProtocol: udp
+          FromPort: '4500'
+          ToPort: '4500'
+          CidrIp: !Ref VPNlocalIPRange
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref ONEVPC         
+  
+      
+  VPNGateway: 
+    Type: AWS::EC2::Instance
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          strongswan_install:
+            - config_strongswan            
+        config_strongswan:
+          files:
+            /etc/ipsec.conf:
+              content: 
+                !Sub |
+                   include /var/lib/strongswan/ipsec.conf.inc
+                   conn vpn-aws
+                    type=tunnel
+                    authby=secret
+                    leftid=!GetAtt VPNGateway.PublicIp
+                    leftsubnet=${AWSIPRange}
+                    right=${VPNlocalIP}
+                    rightsubnet=${LocalIPRange}
+                    auto=start
+                    keyexchange=ikev1
+                    ike=aes128-sha1-modp1024
+                    ikelifetime=8h
+                    esp=aes128-sha1-modp1024
+                    lifetime=1h
+                    
+              mode: "000644"
+              owner: "root"
+              group: "root"    
+
+            /etc/ipsec.secrets:
+              content: 
+                !Sub |
+                   include /var/lib/strongswan/ipsec.secrets.inc
+                   !GetAtt VPNGateway.PublicIp ${VPNlocalIP} : PSK "${PreShareKey}"
+              mode: "000644"
+              owner: "root"
+              group: "root"     
+              
+    Properties:
+      ImageId: ami-05e57f3b12eb1c3ac
+      InstanceType: t2.micro 
+      KeyName: 
+        Ref: "KeyName"
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: SRSecurityGroup
+          SubnetId: !Ref SousReseauC
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              # Install the files and packages from the metadata
+            - 'cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource VPNGateway '
+            - '         --configsets strongswan_install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+              
+        
+  Ec2Intranet: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-08a5663ea072b9305
+      InstanceType: t2.micro
+      KeyName: 
+        Ref: "KeyName"
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: "0"
+          GroupSet: 
+            - Ref: SRSecurityGroup
+          SubnetId: !Ref SousReseauC

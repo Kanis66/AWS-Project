@@ -1,0 +1,355 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation projet 10
+Parameters:
+  DBNom:
+    Default: datawp
+    Description: The WordPress database name
+    Type: String
+    
+  DBUser:
+    Default: Admin
+    Description: The WordPress database name
+    Type: String
+    
+  DBPassword:
+    Default: Marinash-66
+    Description: The WordPress database name
+    Type: String
+    
+  DBClass: 
+    Description: Database instance class
+    Type: String
+    Default: db.t2.micro
+  
+  KeyName:
+    Default: projet10
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    
+Resources:
+  ONEVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC'
+
+  SousReseauA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2a
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-a'
+      VpcId: !Ref ONEVPC
+
+  SousReseauB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2b
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-b'
+      VpcId: !Ref ONEVPC
+
+  SousReseauC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-2c
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt ONEVPC.CidrBlock, 3, 8 ]]
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-AZ-c'
+      VpcId: !Ref ONEVPC
+      
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags:
+        - Key: Name
+          Value: 'ONEVPC-InternetGateway'
+          
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ONEVPC
+      InternetGatewayId: !Ref InternetGateway   
+      
+  NatEipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      
+  NatGatewayA:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref SousReseauA
+      Tags:
+        - Key: Name
+          Value: ONEVPC-nat-a
+          
+  NatGatewayB:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref SousReseauB
+      Tags:
+        - Key: Name
+          Value: ONEVPC-nat-b
+          
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-a
+
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref SousReseauA
+      
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ONEVPC
+      Tags:
+        - Key: Name
+          Value: ONEVPC-route-public-b
+
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref SousReseauB
+  
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+      
+  LoadBalancer: 
+    Type:  AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !Ref SRSecurityGroup
+      Subnets:  
+        - !Ref SousReseauA
+        - !Ref SousReseauB
+        
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+               - TargetGroupArn: !Ref SRATargetGroup
+                 Weight: 1
+               - TargetGroupArn: !Ref SRBTargetGroup
+                 Weight: 1
+            
+  SRATargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ONEVPC
+            
+  SRBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref ONEVPC
+      
+  SRSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 security group 
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref ONEVPC         
+  
+  SRScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfig
+      VPCZoneIdentifier: 
+        - !Ref SousReseauA
+        - !Ref SousReseauB
+      MinSize: 2
+      MaxSize: 6
+      TargetGroupARNs: 
+        - !Ref SRATargetGroup
+        - !Ref SRBTargetGroup
+    DependsOn: AttachInternetGateway
+
+  utilec2:
+    Type: AWS::IAM::User
+    Properties: 
+      Groups: 
+        - Administrator
+  
+  utilec2secur:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref utilec2
+      
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          wordpress_install:
+            - install_wordpress      
+        install_wordpress:
+          files:
+            /home/ec2-user/.env:
+              content: 
+                !Sub |
+                   AWS_S3_BUCKET=${LeBucket}
+                   AWS_ACCESS_KEY_ID=${utilec2secur}
+                   AWS_SECRET_ACCESS_KEY=${utilec2secur.SecretAccessKey}
+
+                   WORDPRESS_DB_HOST=${DatabaseWP.Endpoint.Address}:3306
+                   WORDPRESS_DB_USER=${DBUser}
+                   WORDPRESS_DB_PASSWORD=${DBPassword}
+                   WORDPRESS_DB_NAME=${DBNom}
+              mode: "000644"
+              owner: "root"
+              group: "root"     
+    Properties:
+      ImageId: ami-097418bc7ceebf918
+      InstanceType: t2.micro 
+      AssociatePublicIpAddress: true
+      KeyName: 
+        Ref: "KeyName"
+      SecurityGroups:
+          - !Ref SRSecurityGroup
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              # Install the files and packages from the metadata
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource LaunchConfig '
+            - '         --configsets wordpress_install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+              
+    DependsOn: DatabaseWP
+
+  
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        SourceSecurityGroupId: !Ref SRSecurityGroup
+      VpcId: !Ref ONEVPC
+      
+  DBSousreseauGroup: 
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Groupe data sous reseau 
+      DBSubnetGroupName: DataGroup
+      SubnetIds: 
+        - !Ref SousReseauA
+        - !Ref SousReseauB
+    
+      
+  DatabaseWP:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBNom
+      Engine: mariadb
+      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Ref DBUser
+      MultiAZ: True
+      DBSubnetGroupName: !Ref DBSousreseauGroup
+      VPCSecurityGroups:
+      - !GetAtt DBEC2SecurityGroup.GroupId
+    
+  LeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+         BlockPublicAcls: true
+         BlockPublicPolicy: true
+         IgnorePublicAcls: true
+         RestrictPublicBuckets: true
+  
+  Ec2Intranet: 
+    Type: AWS::EC2::Instance
+    Properties: 
+       ImageId: ami-050949f5d3aede071
+       KeyName: 
+         Ref: "KeyName"
+       NetworkInterfaces: 
+         - AssociatePublicIpAddress: "true"
+           DeviceIndex: "0"
+           GroupSet: 
+             - Ref: !Ref SRSecurityGroup
+           SubnetId: !Ref SousReseauC
+   
+Outputs:
+  WebsiteURL:
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - LoadBalancer
+          - DNSName
+        - /wordpress
+    Description: WordPress Website
+    
+ 

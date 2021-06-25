@@ -16,7 +16,7 @@ services:
       - /dev/fuse
     volumes:
       - /mnt/lebucket:/home/test:shared
-    command: /usr/bin/s3fs -f -o allow_other -o use_cache=/tmp ${AWS_S3_BUCKET} /home/te                                                 st
+    command: /usr/bin/s3fs -f -o allow_other -o use_cache=/tmp ${AWS_S3_BUCKET} /home/test
 
   wordpress:
     privileged: true
