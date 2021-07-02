@@ -28,7 +28,7 @@ Parameters:
     Default: 10.0.2.0/24
     Description: Reseau aws a joindre par vpn
     Type: String
-    
+  
   PreShareKey:
     Default: zGDWSf7_YVB2UACpO5pAvUZ2jfl2a94J
     Description: Cle partagee par defaut pour le VPN
@@ -188,7 +188,9 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref ONEVPC         
   
-      
+  VPNEIP:
+    Type: AWS::EC2::EIP
+  
   VPNGateway: 
     Type: AWS::EC2::Instance
     Metadata:
@@ -205,7 +207,7 @@ Resources:
                    conn vpn-aws
                     type=tunnel
                     authby=secret
-                    leftid=!GetAtt VPNGateway.PublicIp
+                    leftid=${VPNEIP}
                     leftsubnet=${AWSIPRange}
                     right=${VPNlocalIP}
                     rightsubnet=${LocalIPRange}
@@ -224,18 +226,18 @@ Resources:
               content: 
                 !Sub |
                    include /var/lib/strongswan/ipsec.secrets.inc
-                   !GetAtt VPNGateway.PublicIp ${VPNlocalIP} : PSK "${PreShareKey}"
+                   ${VPNEIP} ${VPNlocalIP} : PSK "${PreShareKey}"
               mode: "000644"
               owner: "root"
               group: "root"     
-              
+
     Properties:
       ImageId: ami-05e57f3b12eb1c3ac
       InstanceType: t2.micro 
       KeyName: 
         Ref: "KeyName"
       NetworkInterfaces: 
-        - AssociatePublicIpAddress: true
+        - AssociatePublicIpAddress: false
           DeviceIndex: "0"
           GroupSet: 
             - Ref: SRSecurityGroup
@@ -255,7 +257,15 @@ Resources:
             - '         --region '
             - !Ref 'AWS::Region'
             - |+              
-        
+    DependsOn: VPNEIP            
+                        
+  AssociateEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+       EIP: !Ref VPNEIP
+       InstanceId: !Ref VPNGateway
+    DependsOn: VPNGateway
+    
   Ec2Intranet: 
     Type: AWS::EC2::Instance
     Properties: 

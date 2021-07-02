@@ -28,6 +28,11 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
     Type: 'AWS::EC2::KeyPair::KeyName'
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  AdresseMail: 
+    Description: Adresse mail pour notifications
+    Type: String
+    Default: dmpo66@gmail.com
     
 Resources:
   ONEVPC:
@@ -281,8 +286,55 @@ Resources:
             - !Ref 'AWS::Region'
             - |+              
     DependsOn: DatabaseWP
-
+    
+    
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: Alerte Infrastructure AWS
+      Subscription: 
+      - Endpoint: !Ref AdresseMail
+        Protocol: email
   
+  MiseEchellePlus:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      AutoScalingGroupName: !Ref SRScalingGroup
+      ScalingAdjustment: '1'
+      
+  MiseEchelleMoins:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      AutoScalingGroupName: !Ref SRScalingGroup
+      ScalingAdjustment: '-1'
+
+  CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CPU alarm for my instance
+      OKActions:
+        - !Ref SNSTopic
+        - !Ref MiseEchelleMoins
+      AlarmActions:
+        - !Ref SNSTopic
+        - !Ref MiseEchellePlus
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref SRScalingGroup
+        
+        
   DBEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -327,19 +379,6 @@ Resources:
          BlockPublicPolicy: true
          IgnorePublicAcls: true
          RestrictPublicBuckets: true
-  
-  Ec2Intranet: 
-    Type: AWS::EC2::Instance
-    Properties: 
-       ImageId: ami-050949f5d3aede071
-       KeyName: 
-         Ref: "KeyName"
-       NetworkInterfaces: 
-         - AssociatePublicIpAddress: "true"
-           DeviceIndex: "0"
-           GroupSet: 
-             - Ref: !Ref SRSecurityGroup
-           SubnetId: !Ref SousReseauC
    
 Outputs:
   WebsiteURL:
