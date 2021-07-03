@@ -142,12 +142,12 @@ Resources:
       RouteTableId: !Ref PrivateRouteTableC
       SubnetId: !Ref SousReseauC
 
-#  PrivateRouteC:
-#    Type: AWS::EC2::Route
-#    Properties:
-#      DestinationCidrBlock: 0.0.0.0/0
-#      NatGatewayId: !Ref NatGatewayC
-#      RouteTableId: !Ref PrivateRouteTableC
+  PrivateRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PrivateRouteTableC
  
 #  VPNRouteC:
 #    Type: AWS::EC2::Route
@@ -232,7 +232,7 @@ Resources:
               group: "root"     
 
     Properties:
-      ImageId: ami-05e57f3b12eb1c3ac
+      ImageId: ami-02cca02f23a075211
       InstanceType: t2.micro 
       KeyName: 
         Ref: "KeyName"
@@ -249,7 +249,7 @@ Resources:
               #!/bin/bash -xe
             - |
               # Install the files and packages from the metadata
-            - 'cfn-init -v '
+            - 'sudo cfn-init -v '
             - '         --stack '
             - !Ref 'AWS::StackName'
             - '         --resource VPNGateway '
@@ -264,8 +264,10 @@ Resources:
     Properties:
        EIP: !Ref VPNEIP
        InstanceId: !Ref VPNGateway
-    DependsOn: VPNGateway
-    
+    DependsOn: 
+            - VPNGateway
+            - PrivateRouteC
+            
   Ec2Intranet: 
     Type: AWS::EC2::Instance
     Properties: 
