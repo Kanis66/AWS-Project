@@ -230,15 +230,26 @@ Resources:
               mode: "000644"
               owner: "root"
               group: "root"     
-
+          services:
+            sysvinit:
+              ipsec:
+                enabled: 'true'
+                ensureRunning: 'true' 
+                files:
+                  - "/etc/ipsec.conf"
+                  - "/etc/ipsec.secrets"                  
     Properties:
-      ImageId: ami-02cca02f23a075211
+      ImageId: ami-0b4976368b0cdb0f5
       InstanceType: t2.micro 
       KeyName: 
         Ref: "KeyName"
+      Tags:
+        - Key: Name
+          Value: 'VPN EC2'
       NetworkInterfaces: 
-        - AssociatePublicIpAddress: false
-          DeviceIndex: "0"
+        - PrivateIpAddress: 10.0.2.5
+          AssociatePublicIpAddress: false
+          DeviceIndex: 0
           GroupSet: 
             - Ref: SRSecurityGroup
           SubnetId: !Ref SousReseauC
@@ -257,16 +268,17 @@ Resources:
             - '         --region '
             - !Ref 'AWS::Region'
             - |+              
-    DependsOn: VPNEIP            
-                        
+    DependsOn: 
+            - VPNEIP            
+            - PrivateRouteC     
+            
   AssociateEIP:
     Type: AWS::EC2::EIPAssociation
     Properties:
        EIP: !Ref VPNEIP
        InstanceId: !Ref VPNGateway
-    DependsOn: 
-            - VPNGateway
-            - PrivateRouteC
+    DependsOn: VPNGateway
+
             
   Ec2Intranet: 
     Type: AWS::EC2::Instance
@@ -275,9 +287,13 @@ Resources:
       InstanceType: t2.micro
       KeyName: 
         Ref: "KeyName"
-      NetworkInterfaces: 
-        - AssociatePublicIpAddress: true
-          DeviceIndex: "0"
+      Tags:
+        - Key: Name
+          Value: 'EC2 Intranet'
+      NetworkInterfaces:   
+        - PrivateIpAddress: 10.0.2.6       
+          AssociatePublicIpAddress: false
+          DeviceIndex: 0
           GroupSet: 
             - Ref: SRSecurityGroup
           SubnetId: !Ref SousReseauC
