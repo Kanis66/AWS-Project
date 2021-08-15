@@ -14,7 +14,7 @@ Parameters:
     Type: String
     
   DBPassword:
-    Default: Marinash-66
+    Default: Admin
     Description: The WordPress database name
     Type: String
     
