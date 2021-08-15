@@ -14,7 +14,7 @@ Parameters:
     Type: String
     
   DBPassword:
-    Default: Marinash-66
+    Default: Admin
     Description: The WordPress database name
     Type: String
     
@@ -32,7 +32,6 @@ Parameters:
   AdresseMail: 
     Description: Adresse mail pour notifications
     Type: String
-    Default: dmpo66@gmail.com
     
 Resources:
   ONEVPC:
